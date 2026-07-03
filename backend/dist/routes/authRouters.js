@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const AuthController_1 = require("../controllers/AuthController");
+const router = (0, express_1.Router)();
+router.post("/registro", AuthController_1.registrar);
+router.post("/login", AuthController_1.login);
+router.get("/perfil/:id", AuthController_1.obtenerPerfil);
+router.put("/perfil/update", AuthController_1.actualizarPerfil);
+router.put("/perfil/:id", AuthController_1.actualizarPerfil);
+router.post("/recuperar", AuthController_1.solicitarRecuperacion);
+router.post("/cambiar-contrasena", AuthController_1.cambiarContraseña);
+router.post("/logout", AuthController_1.logout);
+exports.default = router;

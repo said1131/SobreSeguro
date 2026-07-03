@@ -59,3 +59,14 @@ export function signInUser(email: string, password: string) {
     password: password || defaultUser.password,
   })
 }
+
+export function signOutUser() {
+  if (typeof window === 'undefined') {
+    return
+  }
+  // Remover todas las claves de autenticación
+  window.localStorage.removeItem(registeredUserKey)
+  window.localStorage.removeItem(currentUserKey)
+  window.localStorage.removeItem(legacyUserKey)
+  window.localStorage.removeItem('storedUser')
+}

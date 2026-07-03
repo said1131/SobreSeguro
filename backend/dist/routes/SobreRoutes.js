@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const SobresController_1 = require("../controllers/SobresController");
+const router = (0, express_1.Router)();
+router.get("/", SobresController_1.obtenerSobres);
+router.post("/", SobresController_1.crearSobre);
+router.put("/ahorro", SobresController_1.configurarAhorro);
+router.put("/porcentajes", SobresController_1.actualizarPorcentajesSobres);
+router.put("/:id/porcentaje", SobresController_1.actualizarPorcentajeSobre);
+router.delete("/:id", SobresController_1.eliminarSobre);
+exports.default = router;

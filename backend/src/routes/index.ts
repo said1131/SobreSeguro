@@ -1,11 +1,13 @@
 import { Router } from "express";
 
+import sobreRoutes from "./SobreRoutes";
+import ingresoRoutes from "./IngresosRoutes";
+import retirosRoutes from "./RetirosRoutes";
+
 const router = Router();
 
-router.get("/test", (req, res) => {
-    res.status(200).json({
-        mensaje: "API funcionando correctamente 🚀"
-    });
-});
+router.use("/sobres", sobreRoutes);
+router.use("/ingresos", ingresoRoutes);
+router.use("/retiros", retirosRoutes);
 
 export default router;

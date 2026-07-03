@@ -4,7 +4,8 @@ import {
     obtenerSobres,
     crearSobre,
     configurarAhorro,
-    actualizarPorcentajes,
+    actualizarPorcentajesSobres,
+    actualizarPorcentajeSobre,
     eliminarSobre
 } from "../controllers/SobresController";
 
@@ -16,7 +17,9 @@ router.post("/", crearSobre);
 
 router.put("/ahorro", configurarAhorro);
 
-router.put("/porcentajes", actualizarPorcentajes);
+router.put("/porcentajes", actualizarPorcentajesSobres);
+
+router.put("/:id/porcentaje", actualizarPorcentajeSobre);
 
 router.delete("/:id", eliminarSobre);
 

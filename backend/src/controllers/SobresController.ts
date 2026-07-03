@@ -1,20 +1,74 @@
 import { Request, Response } from "express";
 import { sobres } from "../data/Sobres";
-import { Sobre } from "../Models/Sobre";
+import Sobre from "../Models/Sobre";
 
-// Obtener todos los sobres
-export const obtenerSobres = (req: Request, res: Response): void => {
-    res.json(sobres);
+// Obtener sobres del usuario
+const getSobresUsuario = (usuarioEmail: string) => {
+    return sobres.filter(s => s.usuarioEmail === usuarioEmail);
 };
 
-// Crear un nuevo sobre
-export const crearSobre = (req: Request, res: Response): void => {
+// Validar que los porcentajes NO ahorro sumen correctamente (POR USUARIO)
+const validarPorcentajesNoAhorro = (usuarioEmail: string, porcentajeNuevo: number = 0, excluirId?: number): boolean => {
+    const sobresUsuario = getSobresUsuario(usuarioEmail);
+    const ahorro = sobresUsuario.find(s => s.esAhorro);
+    if (!ahorro) return false;
 
+    const porcentajeDisponible = 100 - ahorro.porcentaje;
+    const suma = sobresUsuario
+        .filter(s => !s.esAhorro && s.id !== excluirId && s.activo)
+        .reduce((total, s) => total + s.porcentaje, 0);
+
+    return suma + porcentajeNuevo <= porcentajeDisponible;
+};
+
+// Obtener todos los sobres del usuario
+export const obtenerSobres = (req: Request, res: Response): void => {
+    const usuarioEmail = req.headers["x-usuario-email"] as string;
+    
+    if (!usuarioEmail) {
+        res.status(400).json({
+            mensaje: "Usuario no autenticado"
+        });
+        return;
+    }
+
+    const sobresUsuario = getSobresUsuario(usuarioEmail);
+    res.json(sobresUsuario);
+};
+
+// Crear un nuevo sobre (no ahorro)
+export const crearSobre = (req: Request, res: Response): void => {
+    const usuarioEmail = req.headers["x-usuario-email"] as string;
     const { nombre, porcentaje } = req.body;
 
-    // Validar nombre repetido
-    const existe = sobres.find(s =>
-        s.nombre.toLowerCase() === nombre.toLowerCase()
+    console.log(`[crearSobre] Email: ${usuarioEmail}, Nombre: ${nombre}, Porcentaje: ${porcentaje}`);
+
+    if (!usuarioEmail) {
+        res.status(400).json({
+            mensaje: "Usuario no autenticado"
+        });
+        return;
+    }
+
+    if (!nombre || porcentaje == null) {
+        res.status(400).json({
+            mensaje: "Nombre y porcentaje son obligatorios."
+        });
+        return;
+    }
+
+    if (porcentaje <= 0) {
+        res.status(400).json({
+            mensaje: "El porcentaje debe ser mayor a 0."
+        });
+        return;
+    }
+
+    const sobresUsuario = getSobresUsuario(usuarioEmail);
+    console.log(`[crearSobre] Sobres del usuario: ${sobresUsuario.length}`, sobresUsuario);
+
+    const existe = sobresUsuario.find(
+        s => s.nombre.toLowerCase() === nombre.toLowerCase()
     );
 
     if (existe) {
@@ -24,31 +78,46 @@ export const crearSobre = (req: Request, res: Response): void => {
         return;
     }
 
-    // Obtener porcentaje del ahorro
-    const ahorro = sobres.find(s => s.esAhorro);
+    const ahorro = sobresUsuario.find(s => s.esAhorro);
+    console.log(`[crearSobre] Sobre de ahorro:`, ahorro);
 
-    const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
-
-    // Sumar porcentajes actuales (sin ahorro)
-    const suma = sobres
-        .filter(s => !s.esAhorro)
-        .reduce((total, s) => total + s.porcentaje, 0);
-
-    if (suma + porcentaje > porcentajeDisponible) {
+    if (!ahorro) {
         res.status(400).json({
-            mensaje: `Solo puedes repartir ${porcentajeDisponible}% entre los sobres.`
+            mensaje: "Debes configurar el ahorro primero."
         });
         return;
     }
 
-    const nuevoSobre: Sobre = {
-        id: sobres.length + 1,
+    if (!validarPorcentajesNoAhorro(usuarioEmail, porcentaje)) {
+        const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
+        const sumaActual = sobresUsuario
+            .filter(s => !s.esAhorro && s.activo)
+            .reduce((total, s) => total + s.porcentaje, 0);
+
+        res.status(400).json({
+            mensaje: `Has excedido el límite. Disponible: ${porcentajeDisponible}% (Usado: ${sumaActual}%). Intenta agregar: ${porcentaje}%. Necesitas liberar ${sumaActual + porcentaje - porcentajeDisponible}% ajustando otros sobres.`,
+            error: true,
+            disponible: porcentajeDisponible,
+            usado: sumaActual,
+            intento: porcentaje
+        });
+        return;
+    }
+
+    const ultimoId = sobresUsuario.length > 0 ? Math.max(...sobresUsuario.map(s => s.id)) : 0;
+
+    const nuevoSobre = new Sobre(
+        ultimoId + 1,
         nombre,
         porcentaje,
-        saldo: 0,
-        esAhorro: false,
-        activo: true
-    };
+        0,
+        false,
+        true,
+        false,
+        0,
+        "mensual",
+        usuarioEmail
+    );
 
     sobres.push(nuevoSobre);
 
@@ -56,26 +125,69 @@ export const crearSobre = (req: Request, res: Response): void => {
         mensaje: "Sobre creado correctamente.",
         sobre: nuevoSobre
     });
-
 };
 
-// Configurar porcentaje del ahorro
+// Configurar porcentaje del ahorro (SOLO UNA VEZ)
 export const configurarAhorro = (req: Request, res: Response): void => {
+    const usuarioEmail = req.headers["x-usuario-email"] as string;
+    const { porcentaje, tiempoBloqueoMeses } = req.body;
 
-    const { porcentaje } = req.body;
+    if (!usuarioEmail) {
+        res.status(400).json({
+            mensaje: "Usuario no autenticado"
+        });
+        return;
+    }
 
-    const ahorro = sobres.find(s => s.esAhorro);
+    if (!porcentaje || !tiempoBloqueoMeses) {
+        res.status(400).json({
+            mensaje: "Porcentaje y tiempo de bloqueo son obligatorios."
+        });
+        return;
+    }
+
+    if (tiempoBloqueoMeses <= 0 || tiempoBloqueoMeses > 60) {
+        res.status(400).json({
+            mensaje: "El tiempo de bloqueo debe estar entre 1 y 60 meses."
+        });
+        return;
+    }
+
+    const sobresUsuario = getSobresUsuario(usuarioEmail);
+    const ahorro = sobresUsuario.find(s => s.esAhorro);
 
     if (!ahorro) {
-        res.status(404).json({
-            mensaje: "No existe el sobre de ahorro."
+        // Crear el sobre de ahorro si no existe
+        const fechaBloqueo = new Date();
+        fechaBloqueo.setMonth(fechaBloqueo.getMonth() + tiempoBloqueoMeses);
+
+        const nuevoAhorro = new Sobre(
+            Math.max(...sobres.map(s => s.id), 0) + 1,
+            "Ahorro",
+            porcentaje,
+            0,
+            true,
+            true,
+            false,
+            0,
+            "mensual",
+            usuarioEmail,
+            fechaBloqueo,
+            tiempoBloqueoMeses
+        );
+        sobres.push(nuevoAhorro);
+        
+        res.json({
+            mensaje: "Porcentaje de ahorro configurado con bloqueo de " + tiempoBloqueoMeses + " meses.",
+            ahorro: nuevoAhorro,
+            disponibleParaOtrosSobres: 100 - porcentaje
         });
         return;
     }
 
     if (ahorro.porcentaje > 0) {
         res.status(400).json({
-            mensaje: "El porcentaje del ahorro ya fue configurado."
+            mensaje: "El porcentaje del ahorro ya fue configurado y no se puede cambiar."
         });
         return;
     }
@@ -88,67 +200,82 @@ export const configurarAhorro = (req: Request, res: Response): void => {
     }
 
     ahorro.porcentaje = porcentaje;
+    ahorro.tiempoBloqueoMeses = tiempoBloqueoMeses;
+    
+    const fechaBloqueo = new Date();
+    fechaBloqueo.setMonth(fechaBloqueo.getMonth() + tiempoBloqueoMeses);
+    ahorro.fechaBloqueo = fechaBloqueo;
 
     res.json({
-        mensaje: "Porcentaje de ahorro configurado.",
-        ahorro
+        mensaje: "Porcentaje de ahorro configurado (no se puede cambiar después) con bloqueo de " + tiempoBloqueoMeses + " meses.",
+        ahorro,
+        disponibleParaOtrosSobres: 100 - porcentaje
     });
-
 };
 
-// Actualizar porcentajes de TODOS los sobres
-export const actualizarPorcentajes = (req: Request, res: Response): void => {
+// Actualizar porcentajes de sobres NO ahorro
+export const actualizarPorcentajesSobres = (req: Request, res: Response): void => {
+    const usuarioEmail = req.headers["x-usuario-email"] as string;
+    const nuevosSobres: Array<{ id: number; porcentaje: number }> = req.body;
 
-    const nuevosSobres = req.body;
+    if (!usuarioEmail) {
+        res.status(400).json({
+            mensaje: "Usuario no autenticado"
+        });
+        return;
+    }
 
-    const ahorro = sobres.find(s => s.esAhorro);
+    const sobresUsuario = getSobresUsuario(usuarioEmail);
+    const ahorro = sobresUsuario.find(s => s.esAhorro);
 
-    if (!ahorro) {
-        res.status(404).json({
-            mensaje: "No existe el ahorro."
+    if (!ahorro || ahorro.porcentaje === 0) {
+        res.status(400).json({
+            mensaje: "El ahorro no está configurado."
         });
         return;
     }
 
     const porcentajeDisponible = 100 - ahorro.porcentaje;
 
-    const suma = nuevosSobres.reduce(
-        (total: number, s: Sobre) => total + s.porcentaje,
-        0
-    );
+    // Calcular suma de nuevos porcentajes
+    const suma = nuevosSobres.reduce((total, s) => total + s.porcentaje, 0);
 
     if (suma !== porcentajeDisponible) {
         res.status(400).json({
-            mensaje: `Los porcentajes deben sumar exactamente ${porcentajeDisponible}%.`
+            mensaje: `Los porcentajes deben sumar exactamente ${porcentajeDisponible}%.`,
+            sumaActual: suma,
+            esperada: porcentajeDisponible
         });
         return;
     }
 
-    nuevosSobres.forEach((nuevo: Sobre) => {
-
-        const sobre = sobres.find(
-            s => s.id === nuevo.id && !s.esAhorro
-        );
-
+    // Actualizar porcentajes
+    nuevosSobres.forEach(nuevo => {
+        const sobre = sobresUsuario.find(s => s.id === nuevo.id && !s.esAhorro);
         if (sobre) {
-            sobre.nombre = nuevo.nombre;
             sobre.porcentaje = nuevo.porcentaje;
         }
-
     });
 
     res.json({
-        mensaje: "Porcentajes actualizados correctamente."
+        mensaje: "Porcentajes actualizados correctamente.",
+        sobres: sobresUsuario.filter(s => !s.esAhorro)
     });
-
 };
 
-// Eliminar sobre
+// Eliminar sobre (no se puede eliminar ahorro)
 export const eliminarSobre = (req: Request, res: Response): void => {
-
+    const usuarioEmail = req.headers["x-usuario-email"] as string;
     const id = Number(req.params.id);
 
-    const index = sobres.findIndex(s => s.id === id);
+    if (!usuarioEmail) {
+        res.status(400).json({
+            mensaje: "Usuario no autenticado"
+        });
+        return;
+    }
+
+    const index = sobres.findIndex(s => s.id === id && s.usuarioEmail === usuarioEmail);
 
     if (index === -1) {
         res.status(404).json({
@@ -164,10 +291,72 @@ export const eliminarSobre = (req: Request, res: Response): void => {
         return;
     }
 
-    sobres.splice(index, 1);
+    const nombreEliminado = sobres[index].nombre;
+    sobres[index].activo = false;
 
     res.json({
-        mensaje: "Sobre eliminado correctamente."
+        mensaje: `Sobre '${nombreEliminado}' desactivado correctamente.`
     });
+};
 
+// Actualizar porcentaje de un sobre individual
+export const actualizarPorcentajeSobre = (req: Request, res: Response): void => {
+    const usuarioEmail = req.headers["x-usuario-email"] as string;
+    const id = Number(req.params.id);
+    const { porcentaje } = req.body;
+
+    if (!usuarioEmail) {
+        res.status(400).json({
+            mensaje: "Usuario no autenticado"
+        });
+        return;
+    }
+
+    if (porcentaje == null || porcentaje < 0) {
+        res.status(400).json({
+            mensaje: "Porcentaje inválido"
+        });
+        return;
+    }
+
+    const sobresUsuario = getSobresUsuario(usuarioEmail);
+    const sobre = sobresUsuario.find(s => s.id === id);
+
+    if (!sobre) {
+        res.status(404).json({
+            mensaje: "Sobre no encontrado."
+        });
+        return;
+    }
+
+    if (sobre.esAhorro) {
+        res.status(400).json({
+            mensaje: "No se puede cambiar el porcentaje del ahorro."
+        });
+        return;
+    }
+
+    const porcentajeAnterior = sobre.porcentaje;
+    const diferencia = porcentaje - porcentajeAnterior;
+
+    // Validar que la suma de porcentajes (excluido este) más el nuevo no exceda lo disponible
+    const ahorro = sobresUsuario.find(s => s.esAhorro);
+    const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
+    const sumaOtros = sobresUsuario
+        .filter(s => !s.esAhorro && s.id !== id && s.activo)
+        .reduce((total, s) => total + s.porcentaje, 0);
+
+    if (sumaOtros + porcentaje > porcentajeDisponible) {
+        res.status(400).json({
+            mensaje: `Has excedido el límite. Disponible: ${porcentajeDisponible}%. Otros sobres usan: ${sumaOtros}%. Intentas usar: ${porcentaje}%. Total: ${sumaOtros + porcentaje}%.`
+        });
+        return;
+    }
+
+    sobre.porcentaje = porcentaje;
+
+    res.json({
+        mensaje: `Porcentaje de '${sobre.nombre}' actualizado de ${porcentajeAnterior}% a ${porcentaje}%.`,
+        sobre
+    });
 };

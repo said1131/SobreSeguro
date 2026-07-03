@@ -1,4 +1,4 @@
-﻿import logoSrc from '../assets/logo-sobreseguro.png'
+﻿import logoSrc from '../assets/logo.png'
 
 type AppLogoProps = {
   className?: string

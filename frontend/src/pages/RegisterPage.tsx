@@ -1,48 +1,181 @@
-﻿import type { FormEvent } from 'react'
+﻿import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AppLogo } from '../components/AppLogo'
-import { Button } from '../components/button'
-import { TextField } from '../components/TextField'
 import { saveStoredUser } from '../data/userStorage'
+import { apiClient } from '../services/api'
+import logo from '../assets/logo.png'
 
 export function RegisterPage() {
   const navigate = useNavigate()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setLoading(true)
+    setError('')
 
     const formData = new FormData(event.currentTarget)
+    const firstName = String(formData.get('firstName') ?? '')
+    const lastName = String(formData.get('lastName') ?? '')
+    const email = String(formData.get('email') ?? '')
+    const password = String(formData.get('password') ?? '')
+    const confirmPassword = String(formData.get('confirmPassword') ?? '')
 
-    saveStoredUser({
-      firstName: String(formData.get('firstName') ?? ''),
-      lastName: String(formData.get('lastName') ?? ''),
-      email: String(formData.get('email') ?? ''),
-      password: String(formData.get('password') ?? ''),
-    })
+    try {
+      const result = await apiClient.auth.registro({
+        firstName,
+        lastName,
+        email,
+        password,
+        confirmPassword,
+      })
 
-    navigate('/sobres')
+      if (result.usuario) {
+        saveStoredUser({
+          firstName: result.usuario.firstName,
+          lastName: result.usuario.lastName,
+          email: result.usuario.email,
+          password: password,
+        })
+        navigate('/sobres')
+      } else {
+        setError(result.mensaje || 'Error en el registro')
+      }
+    } catch (err) {
+      setError('No se pudo conectar con el servidor.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-zinc-100 px-6 py-10 text-zinc-950">
-      <section className="w-full max-w-4xl rounded-md border-4 border-zinc-950 bg-white px-6 py-10 shadow-[10px_10px_0_#18181b] md:px-16">
-        <div className="mb-6 flex items-center gap-4">
-          <AppLogo className="h-20 w-20" />
-          <h1 className="text-4xl font-black">Registro</h1>
-        </div>
+    <div className="min-h-screen bg-gray-900 flex">
+      {/* Panel Izquierdo Marrón */}
+      <div className="hidden lg:flex w-1/2 flex-col items-center justify-center p-8" style={{backgroundColor: '#3d2817'}}>
+        <img src={logo} alt="Logo" className="w-32 h-32 mb-8 rounded-lg" />
+        <h1 className="text-5xl font-black text-white mb-4 text-center">SobreSeguro</h1>
+        <p className="text-amber-100 text-center text-lg">
+          Crea una cuenta y comienza a gestionar tus finanzas
+        </p>
+      </div>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <TextField label="Nombre:" name="firstName" placeholder="Karla Jhoana" required />
-          <TextField label="Apellido:" name="lastName" placeholder="Chi Rodriguez" required />
-          <TextField label="Correo:" name="email" type="email" placeholder="Example@gmail.com" required />
-          <TextField label="Contrasena:" name="password" type="password" placeholder="********" required />
-          <div className="flex flex-col items-center gap-5 pt-3 md:flex-row md:justify-center">
-            <Button type="submit">Registrar</Button>
-            <Link className="font-semibold text-sky-600 underline" to="/login">Iniciar sesion</Link>
+      {/* Formulario */}
+      <div className="w-full lg:w-1/2 bg-gray-800 flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md max-h-screen overflow-y-auto">
+          {/* Logo móvil */}
+          <div className="lg:hidden text-center mb-8">
+            <img src={logo} alt="Logo" className="w-20 h-20 mx-auto mb-4 rounded-lg" />
+            <h1 className="text-3xl font-black text-white">SobreSeguro</h1>
           </div>
-        </form>
-      </section>
-    </main>
+
+          <h2 className="text-3xl font-bold text-white mb-2 text-center">Crear Cuenta</h2>
+          <p className="text-gray-400 text-center mb-8">Completa el formulario para registrarte</p>
+
+          {error && (
+            <div className="bg-red-900 border border-red-700 text-red-100 px-4 py-3 rounded-lg mb-6">
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            {/* Nombre */}
+            <div>
+              <label className="block text-gray-300 font-semibold mb-2">
+                Nombre
+              </label>
+              <input
+                type="text"
+                name="firstName"
+                placeholder="Juan"
+                required
+                disabled={loading}
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50"
+              />
+            </div>
+
+            {/* Apellido */}
+            <div>
+              <label className="block text-gray-300 font-semibold mb-2">
+                Apellido
+              </label>
+              <input
+                type="text"
+                name="lastName"
+                placeholder="Pérez"
+                required
+                disabled={loading}
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50"
+              />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-gray-300 font-semibold mb-2">
+                Correo Electrónico
+              </label>
+              <input
+                type="email"
+                name="email"
+                placeholder="tu@email.com"
+                required
+                disabled={loading}
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50"
+              />
+            </div>
+
+            {/* Contraseña */}
+            <div>
+              <label className="block text-gray-300 font-semibold mb-2">
+                Contraseña
+              </label>
+              <input
+                type="password"
+                name="password"
+                placeholder="••••••••"
+                required
+                disabled={loading}
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50"
+              />
+            </div>
+
+            {/* Confirmar Contraseña */}
+            <div>
+              <label className="block text-gray-300 font-semibold mb-2">
+                Confirmar Contraseña
+              </label>
+              <input
+                type="password"
+                name="confirmPassword"
+                placeholder="••••••••"
+                required
+                disabled={loading}
+                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50"
+              />
+            </div>
+
+            {/* Botón */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-bold rounded-lg transition duration-200 text-lg mt-8"
+            >
+              {loading ? 'Registrando...' : 'Crear Cuenta'}
+            </button>
+          </form>
+
+          {/* Link Login */}
+          <div className="mt-8 text-center">
+            <span className="text-gray-400">¿Ya tienes cuenta? </span>
+            <Link
+              to="/login"
+              className="text-amber-400 hover:text-amber-300 font-semibold transition"
+            >
+              Inicia sesión
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 

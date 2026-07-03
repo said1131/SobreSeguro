@@ -5,6 +5,7 @@
   placeholder?: string
   defaultValue?: string
   required?: boolean
+  disabled?: boolean
 }
 
 export function TextField({
@@ -14,6 +15,7 @@ export function TextField({
   placeholder,
   defaultValue,
   required = false,
+  disabled = false,
 }: TextFieldProps) {
   return (
     <label className="block w-full">
@@ -24,7 +26,8 @@ export function TextField({
         placeholder={placeholder}
         defaultValue={defaultValue}
         required={required}
-        className="w-full rounded-md border border-gray-400 px-3 py-2 outline-none focus:border-green-600"
+        disabled={disabled}
+        className="w-full rounded-md border border-gray-400 px-3 py-2 outline-none focus:border-green-600 disabled:bg-gray-100 disabled:cursor-not-allowed"
       />
     </label>
   )
