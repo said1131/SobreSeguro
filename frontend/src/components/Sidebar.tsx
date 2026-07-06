@@ -13,7 +13,7 @@ export function Sidebar() {
   const sidebarUser = useMemo(() => getStoredUser(), [])
 
   return (
-    <aside className="bg-gray-900 text-white md:min-h-screen md:w-56">
+    <aside className="text-white md:h-screen md:w-56 flex flex-col" style={{backgroundColor: '#3d2817'}}>
       <Link to="/perfil" className="block border-b border-gray-700 p-5 text-center hover:bg-gray-800">
         <div className="mx-auto mb-2 flex h-20 w-20 items-center justify-center rounded-full border border-white text-4xl">
           👤
@@ -21,7 +21,7 @@ export function Sidebar() {
         <p>{sidebarUser.firstName.split(' ')[0]}</p>
       </Link>
 
-      <nav className="flex flex-col">
+      <nav className="flex flex-col flex-1">
         {navItems.map((item) => (
           <NavLink
             key={item.to}

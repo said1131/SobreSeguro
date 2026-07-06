@@ -42,16 +42,16 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-gray-900 flex">
       {/* Panel Izquierdo Marrón */}
-      <div className="hidden lg:flex w-1/2 flex-col items-center justify-center p-8" style={{backgroundColor: '#3d2817'}}>
-        <img src={logo} alt="Logo" className="w-32 h-32 mb-8 rounded-lg" />
+      <div className="hidden lg:flex w-1/2 flex-col items-center justify-center p-8" style={{backgroundColor: '#2d160b'}}>
+         <img src={logo} alt="Logo" className="w-32 object-contain mb-4" />
         <h1 className="text-5xl font-black text-white mb-4 text-center">SobreSeguro</h1>
         <p className="text-amber-100 text-center text-lg">
-          Ahorro sin esfuerzo, un sobre a la vez
+          Ahorra sin esfuerzo, un sobre a la vez
         </p>
       </div>
 
       {/* Formulario */}
-      <div className="w-full lg:w-1/2 bg-gray-800 flex flex-col items-center justify-center p-6">
+       <div className="w-full lg:w-1/2 bg-gray-800 flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-md">
           {/* Logo móvil */}
           <div className="lg:hidden text-center mb-8">

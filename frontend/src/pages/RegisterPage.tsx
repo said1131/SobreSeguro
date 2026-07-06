@@ -51,8 +51,8 @@ export function RegisterPage() {
   return (
     <div className="min-h-screen bg-gray-900 flex">
       {/* Panel Izquierdo Marrón */}
-      <div className="hidden lg:flex w-1/2 flex-col items-center justify-center p-8" style={{backgroundColor: '#3d2817'}}>
-        <img src={logo} alt="Logo" className="w-32 h-32 mb-8 rounded-lg" />
+      <div className="hidden lg:flex w-1/2 flex-col items-center justify-center p-8" style={{backgroundColor: '#2d160b'}}>
+        <img src={logo} alt="Logo" className="w-32 object-contain mb-4" />
         <h1 className="text-5xl font-black text-white mb-4 text-center">SobreSeguro</h1>
         <p className="text-amber-100 text-center text-lg">
           Crea una cuenta y comienza a gestionar tus finanzas
@@ -61,15 +61,15 @@ export function RegisterPage() {
 
       {/* Formulario */}
       <div className="w-full lg:w-1/2 bg-gray-800 flex flex-col items-center justify-center p-6">
-        <div className="w-full max-w-md max-h-screen overflow-y-auto">
+        <div className="w-full max-w-md">
           {/* Logo móvil */}
-          <div className="lg:hidden text-center mb-8">
-            <img src={logo} alt="Logo" className="w-20 h-20 mx-auto mb-4 rounded-lg" />
+          <div className="lg:hidden text-center mb-4">
+            <img src={logo} alt="Logo" className="w-20 object-contain mx-auto mb-4" />
             <h1 className="text-3xl font-black text-white">SobreSeguro</h1>
           </div>
 
           <h2 className="text-3xl font-bold text-white mb-2 text-center">Crear Cuenta</h2>
-          <p className="text-gray-400 text-center mb-8">Completa el formulario para registrarte</p>
+          <p className="text-gray-400 text-center mb-4">Completa el formulario para registrarte</p>
 
           {error && (
             <div className="bg-red-900 border border-red-700 text-red-100 px-4 py-3 rounded-lg mb-6">
@@ -77,7 +77,7 @@ export function RegisterPage() {
             </div>
           )}
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form className="space-y-3" onSubmit={handleSubmit}>
             {/* Nombre */}
             <div>
               <label className="block text-gray-300 font-semibold mb-2">

@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Menu, X, LogOut, Home, Inbox, DollarSign, TrendingDown, PiggyBank, User, ChevronDown } from 'lucide-react'
 import { signOutUser, getStoredUser } from '../data/userStorage'
 import { apiClient } from '../services/api'
@@ -15,9 +15,9 @@ export function AppLayout({ title, children }: AppLayoutProps) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [userInfo, setUserInfo] = useState<{firstName: string; lastName: string; email: string} | null>(null)
   const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
-    // Obtener información del usuario
     const user = getStoredUser()
     if (user) {
       setUserInfo(user)
@@ -26,12 +26,10 @@ export function AppLayout({ title, children }: AppLayoutProps) {
 
   const handleLogout = async () => {
     try {
-      // Llamar al endpoint de logout del backend
       await apiClient.auth.logout()
     } catch (err) {
       console.error('Error en logout:', err)
     } finally {
-      // Siempre limpiar localStorage y navegar
       signOutUser()
       navigate('/login')
     }
@@ -46,7 +44,7 @@ export function AppLayout({ title, children }: AppLayoutProps) {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-900 flex">
+    <div className="h-screen bg-gray-900 flex overflow-hidden">
       {/* Sidebar */}
       <aside className={`fixed z-40 h-screen w-64 transform transition-transform duration-300 lg:relative lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`} style={{backgroundColor: '#3d2817'}}>
         {/* Cerrar en móvil */}
@@ -59,7 +57,7 @@ export function AppLayout({ title, children }: AppLayoutProps) {
 
         {/* Logo */}
         <div className="p-6 border-b" style={{borderColor: '#2a1810'}}>
-          <img src={logo} alt="Logo" className="w-12 h-12 rounded-lg mx-auto mb-2" />
+          <img src={logo} alt="Logo" className="w-12 object-contain mx-auto mb-2" />
           <h2 className="text-white font-bold text-center text-lg">SobreSeguro</h2>
         </div>
 
@@ -67,6 +65,7 @@ export function AppLayout({ title, children }: AppLayoutProps) {
         <nav className="p-6 space-y-4 flex-1">
           {navItems.map((item) => {
             const Icon = item.icon
+            const isActive = location.pathname === item.path
             return (
               <button
                 key={item.path}
@@ -74,10 +73,15 @@ export function AppLayout({ title, children }: AppLayoutProps) {
                   navigate(item.path)
                   setSidebarOpen(false)
                 }}
-                className="w-full text-left px-4 py-3 rounded-lg text-white transition duration-200 font-semibold flex items-center gap-3"
-                style={{cursor: 'pointer'}}
+                className={`w-full text-left px-4 py-3 rounded-lg text-white transition duration-200 font-semibold flex items-center gap-3 ${
+                  isActive ? 'border-l-4 border-amber-400' : ''
+                }`}
+                style={{
+                  cursor: 'pointer',
+                  backgroundColor: isActive ? '#5a3f2f' : 'transparent'
+                }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4a2f1f'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isActive ? '#5a3f2f' : 'transparent'}
               >
                 <Icon size={20} />
                 {item.label}
@@ -107,7 +111,6 @@ export function AppLayout({ title, children }: AppLayoutProps) {
             <ChevronDown size={18} className={`transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {/* Menu desplegable del perfil */}
           {profileOpen && (
             <div className="mt-3 space-y-2 animate-in">
               <button
@@ -144,7 +147,7 @@ export function AppLayout({ title, children }: AppLayoutProps) {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-gray-800 border-b border-gray-700 p-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -168,4 +171,3 @@ export function AppLayout({ title, children }: AppLayoutProps) {
     </div>
   )
 }
-
