@@ -100,14 +100,16 @@ export function AppLayout({ title, children }: AppLayoutProps) {
           <X size={24} />
         </button>
 
-        {/* Logo */}
-        {/* Logo moderno en una sola línea */}
-<div className="p-6 flex items-center justify-center gap-3 border-b border-amber-950/20">
-  <img src={logo} alt="Logo" className="w-11 h-11 object-contain" />
-  <h2 className="text-white font-extrabold text-xl tracking-tight bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent">
-    SobreSeguro
-  </h2>
-</div>
+      {/* Logo */}
+        <div className="p-6 flex items-center justify-center gap-3">
+          <img src={logo} alt="Logo" className="w-10 h-10 object-contain" />
+          <h2 className="text-white font-extrabold text-xl tracking-tight bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent">
+            SobreSeguro
+          </h2>
+        </div>
+
+        {/* Línea divisoria de extremo a extremo que separa el Logo del Menú */}
+        <div className="border-b -mt-1" style={{ borderColor: '#311d15' }}></div>
 
         {/* Navegación */}
         <nav className="p-6 space-y-4 flex-1">
