@@ -10,6 +10,7 @@ const Sobres_1 = require("../data/Sobres");
 const Notificacion_1 = require("../data/Notificacion");
 const Notificacion_2 = __importDefault(require("../Models/Notificacion"));
 const Ingreso_2 = __importDefault(require("../Models/Ingreso"));
+const Sobre_1 = __importDefault(require("../Models/Sobre"));
 // Obtener ingresos del usuario
 const obtenerIngreso = (req, res) => {
     const usuarioEmail = req.headers["x-usuario-email"];
@@ -51,19 +52,29 @@ const actualizarIngreso = (req, res) => {
         });
         return;
     }
-    // Registrar el ingreso en el historial
     const nuevoIngreso = new Ingreso_2.default(monto, usuarioEmail, new Date());
     Ingreso_1.ingresos.push(nuevoIngreso);
-    // Calcular distribución
     const montoAlAhorro = Number(((monto * ahorro.porcentaje) / 100).toFixed(2));
     ahorro.saldo = Number((ahorro.saldo + montoAlAhorro).toFixed(2));
-    // Distribuir entre otros sobres activos
-    sobresUsuario.forEach(sobre => {
-        if (!sobre.esAhorro && sobre.activo) {
-            const montoSobre = Number(((monto * sobre.porcentaje) / 100).toFixed(2));
-            sobre.saldo = Number((sobre.saldo + montoSobre).toFixed(2));
-        }
+    const sobresActivos = sobresUsuario.filter(s => !s.esAhorro && s.activo);
+    const porcentajeTotal = sobresActivos.reduce((sum, sobre) => sum + sobre.porcentaje, 0);
+    const porcentajeRestante = Math.max(0, 100 - ahorro.porcentaje - porcentajeTotal);
+    let montoResidual = 0;
+    if (porcentajeRestante > 0) {
+        montoResidual = Number(((monto * porcentajeRestante) / 100).toFixed(2));
+    }
+    sobresActivos.forEach(sobre => {
+        const montoSobre = Number(((monto * sobre.porcentaje) / 100).toFixed(2));
+        sobre.saldo = Number((sobre.saldo + montoSobre).toFixed(2));
     });
+    const sobreResidual = sobresUsuario.find(s => s.nombre.toLowerCase() === 'residuo' && s.activo);
+    if (sobreResidual) {
+        sobreResidual.saldo = Number((sobreResidual.saldo + montoResidual).toFixed(2));
+    }
+    else if (montoResidual > 0) {
+        const nuevoId = Sobres_1.sobres.length > 0 ? Math.max(...Sobres_1.sobres.map(s => s.id)) + 1 : 1;
+        Sobres_1.sobres.push(new Sobre_1.default(nuevoId, 'Residuo', porcentajeRestante, montoResidual, false, true, false, 0, 'mensual', usuarioEmail));
+    }
     // Crear notificaciones para pagos automáticos si hay saldo insuficiente
     sobresUsuario.forEach(sobre => {
         if (sobre.esAutomatico && sobre.saldo < sobre.montoAutomatico) {
@@ -83,7 +94,9 @@ const actualizarIngreso = (req, res) => {
         },
         distribucion: {
             alAhorro: montoAlAhorro,
-            porcentajeAhorro: ahorro.porcentaje
+            porcentajeAhorro: ahorro.porcentaje,
+            montoResidual,
+            porcentajeResidual: porcentajeRestante
         },
         sobres: sobresUsuario.filter(s => s.activo).map(s => ({
             id: s.id,

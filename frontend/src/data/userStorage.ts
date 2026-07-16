@@ -18,13 +18,18 @@ function readUser(key: string): AppUser | null {
   }
 
   try {
-    return { ...defaultUser, ...JSON.parse(storedUser) }
+    const parsed = JSON.parse(storedUser)
+    return { ...defaultUser, ...parsed }
   } catch {
     return null
   }
 }
 
 function writeUser(key: string, user: AppUser) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
   window.localStorage.setItem(key, JSON.stringify(user))
 }
 
@@ -34,13 +39,16 @@ function getNameFromEmail(email: string) {
 }
 
 export function getStoredUser(): AppUser {
-  return readUser(currentUserKey) ?? readUser(legacyUserKey) ?? defaultUser
+  return readUser(currentUserKey) ?? readUser(registeredUserKey) ?? readUser(legacyUserKey) ?? defaultUser
 }
 
 export function saveStoredUser(user: AppUser) {
   writeUser(registeredUserKey, user)
   writeUser(currentUserKey, user)
-  window.localStorage.removeItem(legacyUserKey)
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(legacyUserKey)
+    window.localStorage.removeItem('storedUser')
+  }
 }
 
 export function signInUser(email: string, password: string) {
@@ -52,19 +60,22 @@ export function signInUser(email: string, password: string) {
     return
   }
 
-  writeUser(currentUserKey, {
+  const fallbackUser = {
     firstName: getNameFromEmail(normalizedEmail),
     lastName: 'Chi Rodriguez',
     email: normalizedEmail || defaultUser.email,
     password: password || defaultUser.password,
-  })
+  }
+
+  writeUser(currentUserKey, fallbackUser as AppUser)
+  writeUser(registeredUserKey, fallbackUser as AppUser)
 }
 
 export function signOutUser() {
   if (typeof window === 'undefined') {
     return
   }
-  // Remover todas las claves de autenticación
+
   window.localStorage.removeItem(registeredUserKey)
   window.localStorage.removeItem(currentUserKey)
   window.localStorage.removeItem(legacyUserKey)

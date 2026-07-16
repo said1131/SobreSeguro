@@ -1,19 +1,40 @@
-﻿import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Menu, X, LogOut, Home, Inbox, DollarSign, TrendingDown, PiggyBank, User, ChevronDown } from 'lucide-react'
 import { signOutUser, getStoredUser } from '../data/userStorage'
 import { apiClient } from '../services/api'
 import logo from '../assets/logo.png'
+import cerdito from '../assets/Cerdito.png'
 
 type AppLayoutProps = {
   title: string
   children: React.ReactNode
 }
 
+// Arreglo de frases chistosas y motivacionales para el cerdito
+const FRASES_CERDITO = [
+  "¡Oink! Ese saldo se ve hermoso hoy... no lo vayas a gastar en skins de juegos. 🎮",
+  "¿De verdad necesitas comprar eso o solo es un vacío emocional? Pregunto de compas. 🫣",
+  "Cada peso que ahorras es un paso más lejos de vivir debajo de un puente. ¡Ánimo! 🌉",
+  "¡No me rompas! De verdad, soy digital, no tengo monedas adentro. 🚫🔨",
+  "¡Oink! Recuerda: el residuo no es dinero gratis para pedir comida a domicilio. 🍕",
+  "Tu 'yo' del futuro te va a agradecer este ahorro. O se lo va a gastar en otra cosa, pero tú cumple. 🧠",
+  "¿Bloqueaste un sobre de ahorro? Excelente. Mantén tus manos lejos de ahí. 🔒🐷",
+  "¡Ssssshh! Escucho cómo tus ahorros van creciendo. Suena a éxito. 💸",
+  "Ahorrar es como ir al gym: da flojera al principio, pero luego te gusta ver los resultados. 💪",
+  "Si sigues así, pronto el millonario de la familia vas a ser tú. 😎"
+]
+
 export function AppLayout({ title, children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [userInfo, setUserInfo] = useState<{firstName: string; lastName: string; email: string} | null>(null)
+  
+  // Estados para controlar el globo de texto del cerdito
+  const [consejo, setConsejo] = useState("")
+  const [showTooltip, setShowTooltip] = useState(false)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -21,6 +42,13 @@ export function AppLayout({ title, children }: AppLayoutProps) {
     const user = getStoredUser()
     if (user) {
       setUserInfo(user)
+    }
+  }, [])
+
+  // Limpiar el temporizador al salir de la pantalla para evitar fugas de memoria
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
   }, [])
 
@@ -33,6 +61,23 @@ export function AppLayout({ title, children }: AppLayoutProps) {
       signOutUser()
       navigate('/login')
     }
+  }
+
+  // Función para seleccionar una frase aleatoria sin repetir la anterior al dar clic
+  const hablarCerdito = () => {
+    let nuevaFrase = consejo
+    while (nuevaFrase === consejo) {
+      nuevaFrase = FRASES_CERDITO[Math.floor(Math.random() * FRASES_CERDITO.length)]
+    }
+    
+    setConsejo(nuevaFrase)
+    setShowTooltip(true)
+
+    // Ocultar el globo de diálogo después de 8 segundos
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => {
+      setShowTooltip(false)
+    }, 5000)
   }
 
   const navItems = [
@@ -56,10 +101,13 @@ export function AppLayout({ title, children }: AppLayoutProps) {
         </button>
 
         {/* Logo */}
-        <div className="p-6 border-b" style={{borderColor: '#2a1810'}}>
-          <img src={logo} alt="Logo" className="w-12 object-contain mx-auto mb-2" />
-          <h2 className="text-white font-bold text-center text-lg">SobreSeguro</h2>
-        </div>
+        {/* Logo moderno en una sola línea */}
+<div className="p-6 flex items-center justify-center gap-3 border-b border-amber-950/20">
+  <img src={logo} alt="Logo" className="w-11 h-11 object-contain" />
+  <h2 className="text-white font-extrabold text-xl tracking-tight bg-gradient-to-r from-amber-400 to-yellow-300 bg-clip-text text-transparent">
+    SobreSeguro
+  </h2>
+</div>
 
         {/* Navegación */}
         <nav className="p-6 space-y-4 flex-1">
@@ -88,6 +136,27 @@ export function AppLayout({ title, children }: AppLayoutProps) {
               </button>
             )
           })}
+
+          {/* Cerdito Interactivo con Tooltip Flotante */}
+          <div className="pt-4 border-t border-amber-900/40 flex flex-col items-center relative">
+            {showTooltip && (
+              <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 w-52 bg-amber-500 text-gray-950 text-xs font-semibold p-3 rounded-xl shadow-2xl border border-amber-400 text-center">
+                {/* Flecha del globo apuntando hacia abajo */}
+                <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-amber-500 rotate-45 border-r border-b border-amber-400"></div>
+                <p className="relative z-10 leading-snug">{consejo}</p>
+              </div>
+            )}
+
+            <button
+              onClick={hablarCerdito}
+              className="transition-transform active:scale-95 hover:scale-105 focus:outline-none"
+              style={{ cursor: 'pointer' }}
+              title="¡Hazme clic!"
+            >
+              <img src={cerdito} alt="Cerdito" className="w-24 h-24 object-contain filter drop-shadow-[0_4px_6px_rgba(245,158,11,0.2)]" />
+            </button>
+            <span className="text-[10px] text-amber-400/80 font-bold mt-1 tracking-wider uppercase animate-pulse">¡Tócame! 🐷</span>
+          </div>
         </nav>
 
         {/* Panel de Perfil de Usuario */}

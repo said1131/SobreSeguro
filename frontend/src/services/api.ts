@@ -1,17 +1,14 @@
 const API_BASE_URL = "http://localhost:3000/api";
 
-// Obtener usuario autenticado desde localStorage
 const getAuthHeaders = () => {
-  const headers: any = { "Content-Type": "application/json" };
-  
-  // Intentar obtener el email del localStorage
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
   let userEmail: string | null = null;
-  
-  // Verificar varias claves posibles
+
   const storedUserCurrent = localStorage.getItem('sobreseguro-current-user');
   const storedUserRegistered = localStorage.getItem('sobreseguro-registered-user');
   const storedUser = localStorage.getItem('storedUser');
-  
+
   if (storedUserCurrent) {
     try {
       const user = JSON.parse(storedUserCurrent);
@@ -34,12 +31,52 @@ const getAuthHeaders = () => {
       console.error('Error parsing storedUser:', err);
     }
   }
-  
+
   if (userEmail) {
     headers["x-usuario-email"] = userEmail;
   }
-  
+
   return headers;
+};
+
+const parseJsonSafely = async (response: Response) => {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  const text = await response.text();
+  return text ? { mensaje: text } : null;
+};
+
+const requestJson = async (path: string, options: RequestInit = {}) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, options);
+    const data = await parseJsonSafely(response);
+
+    if (!response.ok) {
+      const message = data?.mensaje || data?.error || `Error ${response.status}`;
+      const error = new Error(message) as Error & { status?: number; body?: unknown };
+      error.status = response.status;
+      error.body = data;
+      throw error;
+    }
+
+    return data;
+  } catch (err) {
+    if (err instanceof TypeError) {
+      const networkError = new Error('No se pudo conectar con el servidor.') as Error & { cause?: unknown };
+      networkError.cause = err;
+      throw networkError;
+    }
+
+    throw err;
+  }
 };
 
 export const apiClient = {
@@ -51,54 +88,48 @@ export const apiClient = {
       password: string;
       confirmPassword: string;
     }) => {
-      const response = await fetch(`${API_BASE_URL}/auth/registro`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      return requestJson('/auth/registro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
       });
-      return response.json();
     },
 
     login: async (email: string, password: string) => {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      return requestJson('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      return response.json();
     },
 
     logout: async () => {
-      const response = await fetch(`${API_BASE_URL}/auth/logout`, {
-        method: "POST",
+      return requestJson('/auth/logout', {
+        method: 'POST',
         headers: getAuthHeaders(),
       });
-      return response.json();
     },
 
     obtenerPerfil: async (id: number) => {
-      const response = await fetch(`${API_BASE_URL}/auth/perfil/${id}`, {
+      return requestJson(`/auth/perfil/${id}`, {
         headers: getAuthHeaders(),
       });
-      return response.json();
     },
 
     actualizarPerfil: async (datos: any) => {
-      const response = await fetch(`${API_BASE_URL}/auth/perfil/update`, {
-        method: "PUT",
+      return requestJson('/auth/perfil/update', {
+        method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(datos),
       });
-      return response.json();
     },
 
     solicitarRecuperacion: async (email: string) => {
-      const response = await fetch(`${API_BASE_URL}/auth/recuperar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      return requestJson('/auth/recuperar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      return response.json();
     },
 
     cambiarContrasena: async (datos: {
@@ -107,135 +138,134 @@ export const apiClient = {
       nuevaContrasena: string;
       confirmPassword: string;
     }) => {
-      const response = await fetch(`${API_BASE_URL}/auth/cambiar-contrasena`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      return requestJson('/auth/cambiar-contrasena', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(datos),
       });
-      return response.json();
     },
   },
 
   sobres: {
     obtener: async () => {
-      const response = await fetch(`${API_BASE_URL}/sobres`, {
+      return requestJson('/sobres', {
         headers: getAuthHeaders(),
       });
-      return response.json();
     },
 
     crear: async (datos: { nombre: string; porcentaje: number }) => {
-      const response = await fetch(`${API_BASE_URL}/sobres`, {
-        method: "POST",
+      return requestJson('/sobres', {
+        method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(datos),
       });
-      return response.json();
     },
 
     configurarAhorro: async (porcentaje: number, tiempoBloqueoMeses: number) => {
-      const response = await fetch(`${API_BASE_URL}/sobres/ahorro`, {
-        method: "PUT",
+      return requestJson('/sobres/ahorro', {
+        method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ porcentaje, tiempoBloqueoMeses }),
       });
-      return response.json();
     },
 
     actualizarPorcentajes: async (sobres: any[]) => {
-      const response = await fetch(`${API_BASE_URL}/sobres/porcentajes`, {
-        method: "PUT",
+      return requestJson('/sobres/porcentajes', {
+        method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(sobres),
       });
-      return response.json();
     },
 
     actualizarPorcentajeSobre: async (id: number, porcentaje: number) => {
-      const response = await fetch(`${API_BASE_URL}/sobres/${id}/porcentaje`, {
-        method: "PUT",
+      return requestJson(`/sobres/${id}/porcentaje`, {
+        method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ porcentaje }),
       });
-      return response.json();
     },
 
     eliminar: async (id: number) => {
-      const response = await fetch(`${API_BASE_URL}/sobres/${id}`, {
-        method: "DELETE",
+      return requestJson(`/sobres/${id}`, {
+        method: 'DELETE',
         headers: getAuthHeaders(),
       });
-      return response.json();
     },
   },
 
   ingresos: {
     obtener: async () => {
-      const response = await fetch(`${API_BASE_URL}/ingresos`, {
+      return requestJson('/ingresos', {
         headers: getAuthHeaders(),
       });
-      return response.json();
     },
 
     actualizar: async (monto: number) => {
-      const response = await fetch(`${API_BASE_URL}/ingresos`, {
-        method: "PUT",
+      return requestJson('/ingresos', {
+        method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ monto }),
       });
-      return response.json();
     },
 
     obtenerHistorialCompleto: async () => {
-      const response = await fetch(`${API_BASE_URL}/ingresos/historial/completo`, {
+      return requestJson('/ingresos/historial/completo', {
         headers: getAuthHeaders(),
       });
-      return response.json();
     },
   },
 
   retiros: {
     obtenerRetiros: async () => {
-      const response = await fetch(`${API_BASE_URL}/retiros`, {
+      return requestJson('/retiros', {
         headers: getAuthHeaders(),
       });
-      return response.json();
     },
 
     realizarRetiro: async (sobreId: number, monto: number) => {
       const response = await fetch(`${API_BASE_URL}/retiros`, {
-        method: "POST",
+        method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ sobreId, monto }),
       });
-      const data = await response.json();
-      
-      // Si hay un error en la respuesta, lanzar excepción para que sea capturada
-      if (data.mensaje && !response.ok) {
-        const error = new Error(data.mensaje) as any;
+      const data = await parseJsonSafely(response);
+
+      if (data?.mensaje && !response.ok) {
+        const error = new Error(data.mensaje) as Error & {
+          bloqueado?: boolean;
+          diasRestantes?: number;
+          fechaDesbloqueo?: string;
+        };
         error.bloqueado = data.bloqueado;
         error.diasRestantes = data.diasRestantes;
         error.fechaDesbloqueo = data.fechaDesbloqueo;
         throw error;
       }
-      
-      // Si la respuesta contiene error en body (aunque status sea 200)
-      if (data.error || (data.mensaje && data.mensaje.toLowerCase().includes('bloqueado'))) {
-        const error = new Error(data.mensaje || 'Error en retiro') as any;
+
+      if (data?.error || (data?.mensaje && data.mensaje.toLowerCase().includes('bloqueado'))) {
+        const error = new Error(data.mensaje || 'Error en retiro') as Error & {
+          bloqueado?: boolean;
+          diasRestantes?: number;
+          fechaDesbloqueo?: string;
+        };
         error.bloqueado = data.bloqueado;
         error.diasRestantes = data.diasRestantes;
         error.fechaDesbloqueo = data.fechaDesbloqueo;
         throw error;
       }
-      
+
+      if (!response.ok) {
+        const error = new Error(data?.mensaje || 'Error al realizar retiro');
+        throw error;
+      }
+
       return data;
     },
 
     obtenerRetirosSobre: async (sobreId: number) => {
-      const response = await fetch(`${API_BASE_URL}/retiros/sobre/${sobreId}`, {
+      return requestJson(`/retiros/sobre/${sobreId}`, {
         headers: getAuthHeaders(),
       });
-      return response.json();
     },
   },
 };

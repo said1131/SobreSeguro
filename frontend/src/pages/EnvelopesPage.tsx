@@ -74,14 +74,19 @@ export function EnvelopesPage() {
     }
   }
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: number, saldo: number) {
+    if (saldo > 0) {
+      setError('No puedes eliminar un sobre que todavía tiene saldo.')
+      return
+    }
+
     if (!confirm('¿Estás seguro?')) return
 
     try {
       await apiClient.sobres.eliminar(id)
       await fetchSobres()
     } catch (err) {
-      setError('Error al eliminar')
+      setError(err instanceof Error ? err.message : 'Error al eliminar')
       console.error(err)
     }
   }
@@ -129,9 +134,10 @@ export function EnvelopesPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDelete(sobre.id)}
-                  className="text-gray-400 hover:text-red-500 transition opacity-0 group-hover:opacity-100 p-1"
-                  title="Eliminar sobre"
+                  onClick={() => handleDelete(sobre.id, sobre.saldo)}
+                  disabled={sobre.saldo > 0}
+                  className="text-gray-400 hover:text-red-500 transition opacity-0 group-hover:opacity-100 p-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={sobre.saldo > 0 ? 'No se puede eliminar con saldo' : 'Eliminar sobre'}
                 >
                   <Trash2 size={18} />
                 </button>
@@ -198,7 +204,7 @@ export function EnvelopesPage() {
             {/* Info de porcentajes disponibles */}
             {(() => {
               const ahorroSobre = sobres.find(s => s.esAhorro)
-              const otrosSobres = sobres.filter(s => !s.esAhorro && s.activo)
+              const otrosSobres = sobres.filter(s => !s.esAhorro && s.activo && !s.nombre.toLowerCase().includes('residuo'))
               const porcentajeUsado = otrosSobres.reduce((sum, s) => sum + s.porcentaje, 0)
               const porcentajeDisponible = 100 - (ahorroSobre?.porcentaje || 0) - porcentajeUsado
               

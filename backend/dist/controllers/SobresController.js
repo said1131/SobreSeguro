@@ -10,6 +10,9 @@ const Sobre_1 = __importDefault(require("../Models/Sobre"));
 const getSobresUsuario = (usuarioEmail) => {
     return Sobres_1.sobres.filter(s => s.usuarioEmail === usuarioEmail);
 };
+const esSobreResidual = (sobre) => {
+    return sobre.nombre.toLowerCase() === 'residuo' && sobre.activo !== false;
+};
 // Validar que los porcentajes NO ahorro sumen correctamente (POR USUARIO)
 const validarPorcentajesNoAhorro = (usuarioEmail, porcentajeNuevo = 0, excluirId) => {
     const sobresUsuario = getSobresUsuario(usuarioEmail);
@@ -18,7 +21,7 @@ const validarPorcentajesNoAhorro = (usuarioEmail, porcentajeNuevo = 0, excluirId
         return false;
     const porcentajeDisponible = 100 - ahorro.porcentaje;
     const suma = sobresUsuario
-        .filter(s => !s.esAhorro && s.id !== excluirId && s.activo)
+        .filter(s => !s.esAhorro && s.id !== excluirId && s.activo && !esSobreResidual(s))
         .reduce((total, s) => total + s.porcentaje, 0);
     return suma + porcentajeNuevo <= porcentajeDisponible;
 };
@@ -78,7 +81,7 @@ const crearSobre = (req, res) => {
     if (!validarPorcentajesNoAhorro(usuarioEmail, porcentaje)) {
         const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
         const sumaActual = sobresUsuario
-            .filter(s => !s.esAhorro && s.activo)
+            .filter(s => !s.esAhorro && s.activo && !esSobreResidual(s))
             .reduce((total, s) => total + s.porcentaje, 0);
         res.status(400).json({
             mensaje: `Has excedido el límite. Disponible: ${porcentajeDisponible}% (Usado: ${sumaActual}%). Intenta agregar: ${porcentaje}%. Necesitas liberar ${sumaActual + porcentaje - porcentajeDisponible}% ajustando otros sobres.`,
@@ -89,9 +92,15 @@ const crearSobre = (req, res) => {
         });
         return;
     }
-    const ultimoId = sobresUsuario.length > 0 ? Math.max(...sobresUsuario.map(s => s.id)) : 0;
+    const sobreResidual = Sobres_1.sobres.find(s => s.usuarioEmail === usuarioEmail && s.activo && esSobreResidual(s));
+    const ultimoId = Sobres_1.sobres.length > 0 ? Math.max(...Sobres_1.sobres.map(s => s.id)) : 0;
     const nuevoSobre = new Sobre_1.default(ultimoId + 1, nombre, porcentaje, 0, false, true, false, 0, "mensual", usuarioEmail);
     Sobres_1.sobres.push(nuevoSobre);
+    if (sobreResidual) {
+        nuevoSobre.saldo = Number((nuevoSobre.saldo + sobreResidual.saldo).toFixed(2));
+        sobreResidual.activo = false;
+        sobreResidual.saldo = 0;
+    }
     res.status(201).json({
         mensaje: "Sobre creado correctamente.",
         sobre: nuevoSobre
@@ -221,6 +230,12 @@ const eliminarSobre = (req, res) => {
     if (Sobres_1.sobres[index].esAhorro) {
         res.status(400).json({
             mensaje: "No se puede eliminar el sobre de ahorro."
+        });
+        return;
+    }
+    if (Sobres_1.sobres[index].saldo > 0) {
+        res.status(400).json({
+            mensaje: "No puedes eliminar un sobre que todavía tiene saldo."
         });
         return;
     }

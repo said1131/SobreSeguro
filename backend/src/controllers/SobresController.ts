@@ -7,6 +7,10 @@ const getSobresUsuario = (usuarioEmail: string) => {
     return sobres.filter(s => s.usuarioEmail === usuarioEmail);
 };
 
+const esSobreResidual = (sobre: { nombre: string; activo?: boolean }) => {
+    return sobre.nombre.toLowerCase() === 'residuo' && sobre.activo !== false;
+};
+
 // Validar que los porcentajes NO ahorro sumen correctamente (POR USUARIO)
 const validarPorcentajesNoAhorro = (usuarioEmail: string, porcentajeNuevo: number = 0, excluirId?: number): boolean => {
     const sobresUsuario = getSobresUsuario(usuarioEmail);
@@ -15,7 +19,7 @@ const validarPorcentajesNoAhorro = (usuarioEmail: string, porcentajeNuevo: numbe
 
     const porcentajeDisponible = 100 - ahorro.porcentaje;
     const suma = sobresUsuario
-        .filter(s => !s.esAhorro && s.id !== excluirId && s.activo)
+        .filter(s => !s.esAhorro && s.id !== excluirId && s.activo && !esSobreResidual(s))
         .reduce((total, s) => total + s.porcentaje, 0);
 
     return suma + porcentajeNuevo <= porcentajeDisponible;
@@ -91,7 +95,7 @@ export const crearSobre = (req: Request, res: Response): void => {
     if (!validarPorcentajesNoAhorro(usuarioEmail, porcentaje)) {
         const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
         const sumaActual = sobresUsuario
-            .filter(s => !s.esAhorro && s.activo)
+            .filter(s => !s.esAhorro && s.activo && !esSobreResidual(s))
             .reduce((total, s) => total + s.porcentaje, 0);
 
         res.status(400).json({
@@ -104,7 +108,8 @@ export const crearSobre = (req: Request, res: Response): void => {
         return;
     }
 
-    const ultimoId = sobresUsuario.length > 0 ? Math.max(...sobresUsuario.map(s => s.id)) : 0;
+    const sobreResidual = sobres.find(s => s.usuarioEmail === usuarioEmail && s.activo && esSobreResidual(s));
+    const ultimoId = sobres.length > 0 ? Math.max(...sobres.map(s => s.id)) : 0;
 
     const nuevoSobre = new Sobre(
         ultimoId + 1,
@@ -120,6 +125,12 @@ export const crearSobre = (req: Request, res: Response): void => {
     );
 
     sobres.push(nuevoSobre);
+
+    if (sobreResidual) {
+        nuevoSobre.saldo = Number((nuevoSobre.saldo + sobreResidual.saldo).toFixed(2));
+        sobreResidual.activo = false;
+        sobreResidual.saldo = 0;
+    }
 
     res.status(201).json({
         mensaje: "Sobre creado correctamente.",
@@ -287,6 +298,13 @@ export const eliminarSobre = (req: Request, res: Response): void => {
     if (sobres[index].esAhorro) {
         res.status(400).json({
             mensaje: "No se puede eliminar el sobre de ahorro."
+        });
+        return;
+    }
+
+    if (sobres[index].saldo > 0) {
+        res.status(400).json({
+            mensaje: "No puedes eliminar un sobre que todavía tiene saldo."
         });
         return;
     }
