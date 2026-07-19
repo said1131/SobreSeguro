@@ -67,7 +67,7 @@ export function DashboardPage() {
             ¡Hola {firstName}! 👋
           </h1>
           <p className="text-amber-50 text-lg font-medium">
-            Bienvenida a SobreSeguro - Administra tu dinero de forma inteligente
+            En SobreSeguro podrás administrar tu dinero de forma segura
           </p>
         </div>
  

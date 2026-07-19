@@ -21,7 +21,7 @@ export function SavingsPage() {
   const [ahorro, setAhorro] = useState<Sobre | null>(null)
   const [loading, setLoading] = useState(true)
   const [porcentaje, setPorcentaje] = useState('')
-  const [tiempoBloqueoMeses, setTiempoBloqueoMeses] = useState('12')
+  const [tiempoBloqueoMeses, setTiempoBloqueoMeses] = useState('')
   const [configurando, setConfigurando] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -36,7 +36,7 @@ export function SavingsPage() {
       const result = await apiClient.sobres.obtener()
       const ahorroSobre = result?.find((s: Sobre) => s.esAhorro)
       setAhorro(ahorroSobre || null)
-      if (ahorroSobre) {
+      if (ahorroSobre?.porcentaje > 0) {
         setPorcentaje(ahorroSobre.porcentaje.toString())
       }
     } catch (err) {

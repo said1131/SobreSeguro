@@ -33,7 +33,8 @@ export function LoginPage() {
         setError(result.mensaje || 'Error en el login')
       }
     } catch (err) {
-      setError('No se pudo conectar con el servidor.')
+      const message = err instanceof Error ? err.message : ''
+      setError(message === 'Usuario no registrado' ? 'Usuario no registrado' : message || 'No se pudo conectar con el servidor.')
     } finally {
       setLoading(false)
     }

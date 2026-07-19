@@ -8,5 +8,6 @@ router.post("/", SobresController_1.crearSobre);
 router.put("/ahorro", SobresController_1.configurarAhorro);
 router.put("/porcentajes", SobresController_1.actualizarPorcentajesSobres);
 router.put("/:id/porcentaje", SobresController_1.actualizarPorcentajeSobre);
+router.put("/:id", SobresController_1.actualizarSobre);
 router.delete("/:id", SobresController_1.eliminarSobre);
 exports.default = router;

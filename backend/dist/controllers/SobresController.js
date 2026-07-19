@@ -1,300 +1,354 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.actualizarPorcentajeSobre = exports.eliminarSobre = exports.actualizarPorcentajesSobres = exports.configurarAhorro = exports.crearSobre = exports.obtenerSobres = void 0;
-const Sobres_1 = require("../data/Sobres");
-const Sobre_1 = __importDefault(require("../Models/Sobre"));
-// Obtener sobres del usuario
-const getSobresUsuario = (usuarioEmail) => {
-    return Sobres_1.sobres.filter(s => s.usuarioEmail === usuarioEmail);
-};
+exports.actualizarSobre = exports.actualizarPorcentajeSobre = exports.eliminarSobre = exports.actualizarPorcentajesSobres = exports.configurarAhorro = exports.crearSobre = exports.obtenerSobres = void 0;
+const sqlStore_1 = require("../services/sqlStore");
 const esSobreResidual = (sobre) => {
-    return sobre.nombre.toLowerCase() === 'residuo' && sobre.activo !== false;
+    return sobre.nombre.toLowerCase() === "residuo" && sobre.activo !== false;
 };
-// Validar que los porcentajes NO ahorro sumen correctamente (POR USUARIO)
-const validarPorcentajesNoAhorro = (usuarioEmail, porcentajeNuevo = 0, excluirId) => {
-    const sobresUsuario = getSobresUsuario(usuarioEmail);
-    const ahorro = sobresUsuario.find(s => s.esAhorro);
-    if (!ahorro)
-        return false;
-    const porcentajeDisponible = 100 - ahorro.porcentaje;
-    const suma = sobresUsuario
-        .filter(s => !s.esAhorro && s.id !== excluirId && s.activo && !esSobreResidual(s))
-        .reduce((total, s) => total + s.porcentaje, 0);
-    return suma + porcentajeNuevo <= porcentajeDisponible;
+const getContextoUsuario = async (usuarioEmail) => {
+    const usuario = await (0, sqlStore_1.obtenerUsuarioPorEmail)(usuarioEmail);
+    if (!usuario) {
+        return null;
+    }
+    const sobres = await (0, sqlStore_1.obtenerSobresUsuario)(usuario.id, usuario.email);
+    return { usuarioId: usuario.id, sobres };
 };
 // Obtener todos los sobres del usuario
-const obtenerSobres = (req, res) => {
+const obtenerSobres = async (req, res) => {
     const usuarioEmail = req.headers["x-usuario-email"];
     if (!usuarioEmail) {
-        res.status(400).json({
-            mensaje: "Usuario no autenticado"
-        });
+        res.status(400).json({ mensaje: "Usuario no autenticado" });
         return;
     }
-    const sobresUsuario = getSobresUsuario(usuarioEmail);
-    res.json(sobresUsuario);
+    try {
+        const contexto = await getContextoUsuario(usuarioEmail);
+        if (!contexto) {
+            res.status(404).json({ mensaje: "Usuario no encontrado." });
+            return;
+        }
+        res.json(contexto.sobres);
+    }
+    catch (error) {
+        console.error("Error al obtener sobres:", error);
+        res.status(500).json({ mensaje: "Error interno al obtener sobres." });
+    }
 };
 exports.obtenerSobres = obtenerSobres;
 // Crear un nuevo sobre (no ahorro)
-const crearSobre = (req, res) => {
+const crearSobre = async (req, res) => {
     const usuarioEmail = req.headers["x-usuario-email"];
     const { nombre, porcentaje } = req.body;
-    console.log(`[crearSobre] Email: ${usuarioEmail}, Nombre: ${nombre}, Porcentaje: ${porcentaje}`);
     if (!usuarioEmail) {
-        res.status(400).json({
-            mensaje: "Usuario no autenticado"
-        });
+        res.status(400).json({ mensaje: "Usuario no autenticado" });
         return;
     }
     if (!nombre || porcentaje == null) {
-        res.status(400).json({
-            mensaje: "Nombre y porcentaje son obligatorios."
-        });
+        res.status(400).json({ mensaje: "Nombre y porcentaje son obligatorios." });
         return;
     }
     if (porcentaje <= 0) {
-        res.status(400).json({
-            mensaje: "El porcentaje debe ser mayor a 0."
-        });
+        res.status(400).json({ mensaje: "El porcentaje debe ser mayor a 0." });
         return;
     }
-    const sobresUsuario = getSobresUsuario(usuarioEmail);
-    console.log(`[crearSobre] Sobres del usuario: ${sobresUsuario.length}`, sobresUsuario);
-    const existe = sobresUsuario.find(s => s.nombre.toLowerCase() === nombre.toLowerCase());
-    if (existe) {
-        res.status(400).json({
-            mensaje: "Ya existe un sobre con ese nombre."
-        });
-        return;
-    }
-    const ahorro = sobresUsuario.find(s => s.esAhorro);
-    console.log(`[crearSobre] Sobre de ahorro:`, ahorro);
-    if (!ahorro) {
-        res.status(400).json({
-            mensaje: "Debes configurar el ahorro primero."
-        });
-        return;
-    }
-    if (!validarPorcentajesNoAhorro(usuarioEmail, porcentaje)) {
-        const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
-        const sumaActual = sobresUsuario
+    try {
+        const contexto = await getContextoUsuario(usuarioEmail);
+        if (!contexto) {
+            res.status(404).json({ mensaje: "Usuario no encontrado." });
+            return;
+        }
+        const { usuarioId, sobres } = contexto;
+        const existe = sobres.find(s => s.nombre.toLowerCase() === nombre.toLowerCase() && s.activo);
+        if (existe) {
+            res.status(400).json({ mensaje: "Ya existe un sobre con ese nombre." });
+            return;
+        }
+        const ahorro = sobres.find(s => s.esAhorro);
+        if (!ahorro) {
+            res.status(400).json({ mensaje: "Debes configurar el ahorro primero." });
+            return;
+        }
+        const porcentajeDisponible = 100 - ahorro.porcentaje;
+        const sumaActual = sobres
             .filter(s => !s.esAhorro && s.activo && !esSobreResidual(s))
             .reduce((total, s) => total + s.porcentaje, 0);
-        res.status(400).json({
-            mensaje: `Has excedido el límite. Disponible: ${porcentajeDisponible}% (Usado: ${sumaActual}%). Intenta agregar: ${porcentaje}%. Necesitas liberar ${sumaActual + porcentaje - porcentajeDisponible}% ajustando otros sobres.`,
-            error: true,
-            disponible: porcentajeDisponible,
-            usado: sumaActual,
-            intento: porcentaje
+        if (sumaActual + porcentaje > porcentajeDisponible) {
+            res.status(400).json({
+                mensaje: `Has excedido el limite. Disponible: ${porcentajeDisponible}% (Usado: ${sumaActual}%). Intenta agregar: ${porcentaje}%. Necesitas liberar ${sumaActual + porcentaje - porcentajeDisponible}% ajustando otros sobres.`,
+                error: true,
+                disponible: porcentajeDisponible,
+                usado: sumaActual,
+                intento: porcentaje
+            });
+            return;
+        }
+        const sobreResidual = sobres.find(s => s.activo && esSobreResidual(s) && !s.esAhorro);
+        await (0, sqlStore_1.crearSobreUsuario)(usuarioId, nombre, porcentaje, 0);
+        const sobresActualizados = await (0, sqlStore_1.obtenerSobresUsuario)(usuarioId, usuarioEmail);
+        const nuevoSobre = sobresActualizados
+            .filter(s => !s.esAhorro && s.nombre.toLowerCase() === nombre.toLowerCase())
+            .sort((a, b) => b.id - a.id)[0];
+        if (sobreResidual && nuevoSobre) {
+            const nuevoSaldo = Number((nuevoSobre.saldo + sobreResidual.saldo).toFixed(2));
+            await (0, sqlStore_1.actualizarSaldoSobre)(nuevoSobre.id, nuevoSaldo);
+            await (0, sqlStore_1.actualizarSaldoSobre)(sobreResidual.id, 0);
+            await (0, sqlStore_1.desactivarSobreUsuario)(usuarioId, sobreResidual.id);
+            nuevoSobre.saldo = nuevoSaldo;
+        }
+        res.status(201).json({
+            mensaje: "Sobre creado correctamente.",
+            sobre: nuevoSobre
         });
-        return;
     }
-    const sobreResidual = Sobres_1.sobres.find(s => s.usuarioEmail === usuarioEmail && s.activo && esSobreResidual(s));
-    const ultimoId = Sobres_1.sobres.length > 0 ? Math.max(...Sobres_1.sobres.map(s => s.id)) : 0;
-    const nuevoSobre = new Sobre_1.default(ultimoId + 1, nombre, porcentaje, 0, false, true, false, 0, "mensual", usuarioEmail);
-    Sobres_1.sobres.push(nuevoSobre);
-    if (sobreResidual) {
-        nuevoSobre.saldo = Number((nuevoSobre.saldo + sobreResidual.saldo).toFixed(2));
-        sobreResidual.activo = false;
-        sobreResidual.saldo = 0;
+    catch (error) {
+        console.error("Error al crear sobre:", error);
+        res.status(500).json({ mensaje: "Error interno al crear sobre." });
     }
-    res.status(201).json({
-        mensaje: "Sobre creado correctamente.",
-        sobre: nuevoSobre
-    });
 };
 exports.crearSobre = crearSobre;
-// Configurar porcentaje del ahorro (SOLO UNA VEZ)
-const configurarAhorro = (req, res) => {
+// Configurar porcentaje del ahorro (solo una vez)
+const configurarAhorro = async (req, res) => {
     const usuarioEmail = req.headers["x-usuario-email"];
     const { porcentaje, tiempoBloqueoMeses } = req.body;
     if (!usuarioEmail) {
-        res.status(400).json({
-            mensaje: "Usuario no autenticado"
-        });
+        res.status(400).json({ mensaje: "Usuario no autenticado" });
         return;
     }
     if (!porcentaje || !tiempoBloqueoMeses) {
-        res.status(400).json({
-            mensaje: "Porcentaje y tiempo de bloqueo son obligatorios."
-        });
+        res.status(400).json({ mensaje: "Porcentaje y tiempo de bloqueo son obligatorios." });
         return;
     }
     if (tiempoBloqueoMeses <= 0 || tiempoBloqueoMeses > 60) {
-        res.status(400).json({
-            mensaje: "El tiempo de bloqueo debe estar entre 1 y 60 meses."
-        });
-        return;
-    }
-    const sobresUsuario = getSobresUsuario(usuarioEmail);
-    const ahorro = sobresUsuario.find(s => s.esAhorro);
-    if (!ahorro) {
-        // Crear el sobre de ahorro si no existe
-        const fechaBloqueo = new Date();
-        fechaBloqueo.setMonth(fechaBloqueo.getMonth() + tiempoBloqueoMeses);
-        const nuevoAhorro = new Sobre_1.default(Math.max(...Sobres_1.sobres.map(s => s.id), 0) + 1, "Ahorro", porcentaje, 0, true, true, false, 0, "mensual", usuarioEmail, fechaBloqueo, tiempoBloqueoMeses);
-        Sobres_1.sobres.push(nuevoAhorro);
-        res.json({
-            mensaje: "Porcentaje de ahorro configurado con bloqueo de " + tiempoBloqueoMeses + " meses.",
-            ahorro: nuevoAhorro,
-            disponibleParaOtrosSobres: 100 - porcentaje
-        });
-        return;
-    }
-    if (ahorro.porcentaje > 0) {
-        res.status(400).json({
-            mensaje: "El porcentaje del ahorro ya fue configurado y no se puede cambiar."
-        });
+        res.status(400).json({ mensaje: "El tiempo de bloqueo debe estar entre 1 y 60 meses." });
         return;
     }
     if (porcentaje <= 0 || porcentaje >= 100) {
-        res.status(400).json({
-            mensaje: "El porcentaje debe estar entre 1 y 99."
-        });
+        res.status(400).json({ mensaje: "El porcentaje debe estar entre 1 y 99." });
         return;
     }
-    ahorro.porcentaje = porcentaje;
-    ahorro.tiempoBloqueoMeses = tiempoBloqueoMeses;
-    const fechaBloqueo = new Date();
-    fechaBloqueo.setMonth(fechaBloqueo.getMonth() + tiempoBloqueoMeses);
-    ahorro.fechaBloqueo = fechaBloqueo;
-    res.json({
-        mensaje: "Porcentaje de ahorro configurado (no se puede cambiar después) con bloqueo de " + tiempoBloqueoMeses + " meses.",
-        ahorro,
-        disponibleParaOtrosSobres: 100 - porcentaje
-    });
+    try {
+        const contexto = await getContextoUsuario(usuarioEmail);
+        if (!contexto) {
+            res.status(404).json({ mensaje: "Usuario no encontrado." });
+            return;
+        }
+        const ahorro = contexto.sobres.find(s => s.esAhorro);
+        if (!ahorro) {
+            res.status(400).json({ mensaje: "No existe sobre de ahorro para este usuario." });
+            return;
+        }
+        if (ahorro.porcentaje > 0) {
+            res.status(400).json({ mensaje: "El porcentaje del ahorro ya fue configurado y no se puede cambiar." });
+            return;
+        }
+        await (0, sqlStore_1.actualizarAhorroUsuario)(contexto.usuarioId, porcentaje, tiempoBloqueoMeses);
+        const sobresActualizados = await (0, sqlStore_1.obtenerSobresUsuario)(contexto.usuarioId, usuarioEmail);
+        const ahorroActualizado = sobresActualizados.find(s => s.esAhorro);
+        res.json({
+            mensaje: `Porcentaje de ahorro configurado con bloqueo de ${tiempoBloqueoMeses} meses.`,
+            ahorro: ahorroActualizado,
+            disponibleParaOtrosSobres: 100 - porcentaje
+        });
+    }
+    catch (error) {
+        console.error("Error al configurar ahorro:", error);
+        res.status(500).json({ mensaje: "Error interno al configurar ahorro." });
+    }
 };
 exports.configurarAhorro = configurarAhorro;
-// Actualizar porcentajes de sobres NO ahorro
-const actualizarPorcentajesSobres = (req, res) => {
+// Actualizar porcentajes de sobres no ahorro
+const actualizarPorcentajesSobres = async (req, res) => {
     const usuarioEmail = req.headers["x-usuario-email"];
     const nuevosSobres = req.body;
     if (!usuarioEmail) {
-        res.status(400).json({
-            mensaje: "Usuario no autenticado"
-        });
+        res.status(400).json({ mensaje: "Usuario no autenticado" });
         return;
     }
-    const sobresUsuario = getSobresUsuario(usuarioEmail);
-    const ahorro = sobresUsuario.find(s => s.esAhorro);
-    if (!ahorro || ahorro.porcentaje === 0) {
-        res.status(400).json({
-            mensaje: "El ahorro no está configurado."
-        });
-        return;
-    }
-    const porcentajeDisponible = 100 - ahorro.porcentaje;
-    // Calcular suma de nuevos porcentajes
-    const suma = nuevosSobres.reduce((total, s) => total + s.porcentaje, 0);
-    if (suma !== porcentajeDisponible) {
-        res.status(400).json({
-            mensaje: `Los porcentajes deben sumar exactamente ${porcentajeDisponible}%.`,
-            sumaActual: suma,
-            esperada: porcentajeDisponible
-        });
-        return;
-    }
-    // Actualizar porcentajes
-    nuevosSobres.forEach(nuevo => {
-        const sobre = sobresUsuario.find(s => s.id === nuevo.id && !s.esAhorro);
-        if (sobre) {
-            sobre.porcentaje = nuevo.porcentaje;
+    try {
+        const contexto = await getContextoUsuario(usuarioEmail);
+        if (!contexto) {
+            res.status(404).json({ mensaje: "Usuario no encontrado." });
+            return;
         }
-    });
-    res.json({
-        mensaje: "Porcentajes actualizados correctamente.",
-        sobres: sobresUsuario.filter(s => !s.esAhorro)
-    });
+        const ahorro = contexto.sobres.find(s => s.esAhorro);
+        if (!ahorro || ahorro.porcentaje === 0) {
+            res.status(400).json({ mensaje: "El ahorro no esta configurado." });
+            return;
+        }
+        const porcentajeDisponible = 100 - ahorro.porcentaje;
+        const suma = nuevosSobres.reduce((total, s) => total + s.porcentaje, 0);
+        if (suma !== porcentajeDisponible) {
+            res.status(400).json({
+                mensaje: `Los porcentajes deben sumar exactamente ${porcentajeDisponible}%.`,
+                sumaActual: suma,
+                esperada: porcentajeDisponible
+            });
+            return;
+        }
+        for (const sobre of nuevosSobres) {
+            await (0, sqlStore_1.actualizarPorcentajeSobreUsuario)(contexto.usuarioId, sobre.id, sobre.porcentaje);
+        }
+        const sobresActualizados = await (0, sqlStore_1.obtenerSobresUsuario)(contexto.usuarioId, usuarioEmail);
+        res.json({
+            mensaje: "Porcentajes actualizados correctamente.",
+            sobres: sobresActualizados.filter(s => !s.esAhorro)
+        });
+    }
+    catch (error) {
+        console.error("Error al actualizar porcentajes:", error);
+        res.status(500).json({ mensaje: "Error interno al actualizar porcentajes." });
+    }
 };
 exports.actualizarPorcentajesSobres = actualizarPorcentajesSobres;
 // Eliminar sobre (no se puede eliminar ahorro)
-const eliminarSobre = (req, res) => {
+const eliminarSobre = async (req, res) => {
     const usuarioEmail = req.headers["x-usuario-email"];
     const id = Number(req.params.id);
     if (!usuarioEmail) {
-        res.status(400).json({
-            mensaje: "Usuario no autenticado"
-        });
+        res.status(400).json({ mensaje: "Usuario no autenticado" });
         return;
     }
-    const index = Sobres_1.sobres.findIndex(s => s.id === id && s.usuarioEmail === usuarioEmail);
-    if (index === -1) {
-        res.status(404).json({
-            mensaje: "Sobre no encontrado."
+    try {
+        const contexto = await getContextoUsuario(usuarioEmail);
+        if (!contexto) {
+            res.status(404).json({ mensaje: "Usuario no encontrado." });
+            return;
+        }
+        const sobre = contexto.sobres.find(s => s.id === id && !s.esAhorro && s.activo);
+        if (!sobre) {
+            res.status(404).json({ mensaje: "Sobre no encontrado." });
+            return;
+        }
+        if (sobre.saldo > 0) {
+            res.status(400).json({ mensaje: "No puedes eliminar un sobre que todavia tiene saldo." });
+            return;
+        }
+        await (0, sqlStore_1.desactivarSobreUsuario)(contexto.usuarioId, id);
+        res.json({
+            mensaje: `Sobre '${sobre.nombre}' desactivado correctamente.`
         });
-        return;
     }
-    if (Sobres_1.sobres[index].esAhorro) {
-        res.status(400).json({
-            mensaje: "No se puede eliminar el sobre de ahorro."
-        });
-        return;
+    catch (error) {
+        console.error("Error al eliminar sobre:", error);
+        res.status(500).json({ mensaje: "Error interno al eliminar sobre." });
     }
-    if (Sobres_1.sobres[index].saldo > 0) {
-        res.status(400).json({
-            mensaje: "No puedes eliminar un sobre que todavía tiene saldo."
-        });
-        return;
-    }
-    const nombreEliminado = Sobres_1.sobres[index].nombre;
-    Sobres_1.sobres[index].activo = false;
-    res.json({
-        mensaje: `Sobre '${nombreEliminado}' desactivado correctamente.`
-    });
 };
 exports.eliminarSobre = eliminarSobre;
 // Actualizar porcentaje de un sobre individual
-const actualizarPorcentajeSobre = (req, res) => {
+const actualizarPorcentajeSobre = async (req, res) => {
     const usuarioEmail = req.headers["x-usuario-email"];
     const id = Number(req.params.id);
     const { porcentaje } = req.body;
     if (!usuarioEmail) {
-        res.status(400).json({
-            mensaje: "Usuario no autenticado"
-        });
+        res.status(400).json({ mensaje: "Usuario no autenticado" });
         return;
     }
     if (porcentaje == null || porcentaje < 0) {
-        res.status(400).json({
-            mensaje: "Porcentaje inválido"
-        });
+        res.status(400).json({ mensaje: "Porcentaje invalido" });
         return;
     }
-    const sobresUsuario = getSobresUsuario(usuarioEmail);
-    const sobre = sobresUsuario.find(s => s.id === id);
-    if (!sobre) {
-        res.status(404).json({
-            mensaje: "Sobre no encontrado."
+    try {
+        const contexto = await getContextoUsuario(usuarioEmail);
+        if (!contexto) {
+            res.status(404).json({ mensaje: "Usuario no encontrado." });
+            return;
+        }
+        const sobre = contexto.sobres.find(s => s.id === id && !s.esAhorro && s.activo);
+        if (!sobre) {
+            res.status(404).json({ mensaje: "Sobre no encontrado." });
+            return;
+        }
+        const ahorro = contexto.sobres.find(s => s.esAhorro);
+        const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
+        const sumaOtros = contexto.sobres
+            .filter(s => !s.esAhorro && s.id !== id && s.activo)
+            .reduce((total, s) => total + s.porcentaje, 0);
+        if (sumaOtros + porcentaje > porcentajeDisponible) {
+            res.status(400).json({
+                mensaje: `Has excedido el limite. Disponible: ${porcentajeDisponible}%. Otros sobres usan: ${sumaOtros}%. Intentas usar: ${porcentaje}%. Total: ${sumaOtros + porcentaje}%.`
+            });
+            return;
+        }
+        await (0, sqlStore_1.actualizarPorcentajeSobreUsuario)(contexto.usuarioId, id, porcentaje);
+        const sobresActualizados = await (0, sqlStore_1.obtenerSobresUsuario)(contexto.usuarioId, usuarioEmail);
+        const sobreActualizado = sobresActualizados.find(s => s.id === id && !s.esAhorro);
+        res.json({
+            mensaje: `Porcentaje de '${sobre.nombre}' actualizado de ${sobre.porcentaje}% a ${porcentaje}%.`,
+            sobre: sobreActualizado
         });
-        return;
     }
-    if (sobre.esAhorro) {
-        res.status(400).json({
-            mensaje: "No se puede cambiar el porcentaje del ahorro."
-        });
-        return;
+    catch (error) {
+        console.error("Error al actualizar porcentaje:", error);
+        res.status(500).json({ mensaje: "Error interno al actualizar porcentaje." });
     }
-    const porcentajeAnterior = sobre.porcentaje;
-    const diferencia = porcentaje - porcentajeAnterior;
-    // Validar que la suma de porcentajes (excluido este) más el nuevo no exceda lo disponible
-    const ahorro = sobresUsuario.find(s => s.esAhorro);
-    const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
-    const sumaOtros = sobresUsuario
-        .filter(s => !s.esAhorro && s.id !== id && s.activo)
-        .reduce((total, s) => total + s.porcentaje, 0);
-    if (sumaOtros + porcentaje > porcentajeDisponible) {
-        res.status(400).json({
-            mensaje: `Has excedido el límite. Disponible: ${porcentajeDisponible}%. Otros sobres usan: ${sumaOtros}%. Intentas usar: ${porcentaje}%. Total: ${sumaOtros + porcentaje}%.`
-        });
-        return;
-    }
-    sobre.porcentaje = porcentaje;
-    res.json({
-        mensaje: `Porcentaje de '${sobre.nombre}' actualizado de ${porcentajeAnterior}% a ${porcentaje}%.`,
-        sobre
-    });
 };
 exports.actualizarPorcentajeSobre = actualizarPorcentajeSobre;
+// Actualizar nombre y/o porcentaje de un sobre creado por el usuario
+const actualizarSobre = async (req, res) => {
+    const usuarioEmail = req.headers["x-usuario-email"];
+    const id = Number(req.params.id);
+    const { nombre, porcentaje } = req.body;
+    if (!usuarioEmail) {
+        res.status(400).json({ mensaje: "Usuario no autenticado" });
+        return;
+    }
+    if (nombre == null && porcentaje == null) {
+        res.status(400).json({ mensaje: "Debes enviar al menos nombre o porcentaje para actualizar." });
+        return;
+    }
+    const nombreLimpio = nombre?.trim();
+    if (nombre != null && !nombreLimpio) {
+        res.status(400).json({ mensaje: "Nombre invalido." });
+        return;
+    }
+    if (porcentaje != null && porcentaje < 0) {
+        res.status(400).json({ mensaje: "Porcentaje invalido" });
+        return;
+    }
+    try {
+        const contexto = await getContextoUsuario(usuarioEmail);
+        if (!contexto) {
+            res.status(404).json({ mensaje: "Usuario no encontrado." });
+            return;
+        }
+        const sobre = contexto.sobres.find(s => s.id === id && !s.esAhorro && s.activo);
+        if (!sobre) {
+            res.status(404).json({ mensaje: "Sobre no encontrado." });
+            return;
+        }
+        if (nombreLimpio) {
+            const existeNombre = contexto.sobres.find(s => !s.esAhorro && s.activo && s.id !== id && s.nombre.toLowerCase() === nombreLimpio.toLowerCase());
+            if (existeNombre) {
+                res.status(400).json({ mensaje: "Ya existe un sobre con ese nombre." });
+                return;
+            }
+        }
+        if (porcentaje != null) {
+            const ahorro = contexto.sobres.find(s => s.esAhorro);
+            const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
+            const sumaOtros = contexto.sobres
+                .filter(s => !s.esAhorro && s.id !== id && s.activo)
+                .reduce((total, s) => total + s.porcentaje, 0);
+            if (sumaOtros + porcentaje > porcentajeDisponible) {
+                res.status(400).json({
+                    mensaje: `Has excedido el limite. Disponible: ${porcentajeDisponible}%. Otros sobres usan: ${sumaOtros}%. Intentas usar: ${porcentaje}%. Total: ${sumaOtros + porcentaje}%.`
+                });
+                return;
+            }
+        }
+        await (0, sqlStore_1.actualizarSobreUsuario)(contexto.usuarioId, id, {
+            nombre: nombreLimpio,
+            porcentaje
+        });
+        const sobresActualizados = await (0, sqlStore_1.obtenerSobresUsuario)(contexto.usuarioId, usuarioEmail);
+        const sobreActualizado = sobresActualizados.find(s => s.id === id && !s.esAhorro);
+        res.json({
+            mensaje: "Sobre actualizado correctamente.",
+            sobre: sobreActualizado
+        });
+    }
+    catch (error) {
+        console.error("Error al actualizar sobre:", error);
+        res.status(500).json({ mensaje: "Error interno al actualizar sobre." });
+    }
+};
+exports.actualizarSobre = actualizarSobre;

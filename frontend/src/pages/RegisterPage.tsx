@@ -37,7 +37,7 @@ export function RegisterPage() {
           email: result.usuario.email,
           password: password,
         })
-        navigate('/sobres')
+        navigate('/inicio')
       } else {
         setError(result.mensaje || 'Error en el registro')
       }

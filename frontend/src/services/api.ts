@@ -185,6 +185,14 @@ export const apiClient = {
       });
     },
 
+    actualizarSobre: async (id: number, datos: { nombre: string; porcentaje: number }) => {
+      return requestJson(`/sobres/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(datos),
+      });
+    },
+
     eliminar: async (id: number) => {
       return requestJson(`/sobres/${id}`, {
         method: 'DELETE',
