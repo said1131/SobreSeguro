@@ -41,7 +41,26 @@ export const obtenerSobres = async (req: Request, res: Response): Promise<void> 
             return;
         }
 
-        res.json(contexto.sobres);
+        // --- NUEVA LÓGICA: Calcular el % real del Residuo ---
+        const ahorro = contexto.sobres.find(s => s.esAhorro);
+        const porcentajeAhorro = ahorro?.porcentaje ?? 0;
+
+        // Sumar % de sobres activos (excluyendo Ahorro y Residuo)
+        const sumaSobres = contexto.sobres
+            .filter(s => !s.esAhorro && s.activo && !esSobreResidual(s))
+            .reduce((acc, s) => acc + s.porcentaje, 0);
+
+        const porcentajeResiduoReal = Math.max(0, 100 - (porcentajeAhorro + sumaSobres));
+
+        // Buscar el sobre Residuo y sobreescribir su porcentaje con el valor real
+        const sobresConResiduoCalculado = contexto.sobres.map(s => {
+            if (esSobreResidual(s) && s.activo) {
+                return { ...s, porcentaje: porcentajeResiduoReal };
+            }
+            return s;
+        });
+
+        res.json(sobresConResiduoCalculado);
     } catch (error) {
         console.error("Error al obtener sobres:", error);
         res.status(500).json({ mensaje: "Error interno al obtener sobres." });
@@ -240,6 +259,7 @@ export const actualizarPorcentajesSobres = async (req: Request, res: Response): 
 };
 
 // Eliminar sobre (no se puede eliminar ahorro)
+// ✅ CAMBIO: saldo pasa al Residuo en lugar de bloquear la eliminación
 export const eliminarSobre = async (req: Request, res: Response): Promise<void> => {
     const usuarioEmail = req.headers["x-usuario-email"] as string;
     const id = Number(req.params.id);
@@ -262,15 +282,22 @@ export const eliminarSobre = async (req: Request, res: Response): Promise<void> 
             return;
         }
 
-        if (sobre.saldo > 0) {
-            res.status(400).json({ mensaje: "No puedes eliminar un sobre que todavia tiene saldo." });
-            return;
+        if (esSobreResidual(sobre)) {
+    res.status(400).json({ mensaje: "No se puede eliminar el sobre Residuo." });
+    return;
+}
+
+        // Si tiene saldo, pasarlo al Residuo antes de eliminar
+        const sobreResidual = contexto.sobres.find(s => s.activo && esSobreResidual(s) && !s.esAhorro);
+        if (sobre.saldo > 0 && sobreResidual) {
+            const nuevoSaldo = Number((sobreResidual.saldo + sobre.saldo).toFixed(2));
+            await actualizarSaldoSobre(sobreResidual.id, nuevoSaldo);
         }
 
         await desactivarSobreUsuario(contexto.usuarioId, id);
 
         res.json({
-            mensaje: `Sobre '${sobre.nombre}' desactivado correctamente.`
+            mensaje: `Sobre '${sobre.nombre}' eliminado correctamente. El saldo fue transferido al sobre Residuo.`
         });
     } catch (error) {
         console.error("Error al eliminar sobre:", error);
@@ -279,6 +306,7 @@ export const eliminarSobre = async (req: Request, res: Response): Promise<void> 
 };
 
 // Actualizar porcentaje de un sobre individual
+// ✅ CAMBIO: excluye Residuo del cálculo de sumaOtros
 export const actualizarPorcentajeSobre = async (req: Request, res: Response): Promise<void> => {
     const usuarioEmail = req.headers["x-usuario-email"] as string;
     const id = Number(req.params.id);
@@ -307,10 +335,16 @@ export const actualizarPorcentajeSobre = async (req: Request, res: Response): Pr
             return;
         }
 
+        if (esSobreResidual(sobre)) {
+    res.status(400).json({ mensaje: "No se puede modificar el sobre Residuo." });
+    return;
+}
+
         const ahorro = contexto.sobres.find(s => s.esAhorro);
         const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
+        // ✅ Excluir Residuo del cálculo
         const sumaOtros = contexto.sobres
-            .filter(s => !s.esAhorro && s.id !== id && s.activo)
+            .filter(s => !s.esAhorro && s.id !== id && s.activo && !esSobreResidual(s))
             .reduce((total, s) => total + s.porcentaje, 0);
 
         if (sumaOtros + porcentaje > porcentajeDisponible) {
@@ -336,10 +370,13 @@ export const actualizarPorcentajeSobre = async (req: Request, res: Response): Pr
 };
 
 // Actualizar nombre y/o porcentaje de un sobre creado por el usuario
+// ✅ CAMBIO: excluye Residuo del cálculo de sumaOtros
 export const actualizarSobre = async (req: Request, res: Response): Promise<void> => {
     const usuarioEmail = req.headers["x-usuario-email"] as string;
     const id = Number(req.params.id);
     const { nombre, porcentaje } = req.body as { nombre?: string; porcentaje?: number };
+
+    
 
     if (!usuarioEmail) {
         res.status(400).json({ mensaje: "Usuario no autenticado" });
@@ -375,6 +412,12 @@ export const actualizarSobre = async (req: Request, res: Response): Promise<void
             return;
         }
 
+
+if (esSobreResidual(sobre)) {
+    res.status(400).json({ mensaje: "No se puede modificar el sobre Residuo." });
+    return;
+}
+
         if (nombreLimpio) {
             const existeNombre = contexto.sobres.find(
                 s => !s.esAhorro && s.activo && s.id !== id && s.nombre.toLowerCase() === nombreLimpio.toLowerCase()
@@ -388,8 +431,9 @@ export const actualizarSobre = async (req: Request, res: Response): Promise<void
         if (porcentaje != null) {
             const ahorro = contexto.sobres.find(s => s.esAhorro);
             const porcentajeDisponible = 100 - (ahorro?.porcentaje ?? 0);
+            // ✅ Excluir Residuo del cálculo
             const sumaOtros = contexto.sobres
-                .filter(s => !s.esAhorro && s.id !== id && s.activo)
+                .filter(s => !s.esAhorro && s.id !== id && s.activo && !esSobreResidual(s))
                 .reduce((total, s) => total + s.porcentaje, 0);
 
             if (sumaOtros + porcentaje > porcentajeDisponible) {

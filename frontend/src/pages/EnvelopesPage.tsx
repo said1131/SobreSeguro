@@ -13,6 +13,43 @@ interface Sobre {
   activo: boolean
 }
 
+// ===== COMPONENTE DEL DIÁLOGO PERSONALIZADO =====
+interface ConfirmDialogProps {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmDialog({ isOpen, title, message, onConfirm, onCancel }: ConfirmDialogProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-800 p-6 shadow-xl">
+        <h3 className="mb-2 text-xl font-bold text-white">{title}</h3>
+        <p className="mb-6 text-gray-300">{message}</p>
+        <div className="flex gap-3">
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-lg bg-red-600 px-4 py-2 font-semibold text-white transition hover:bg-red-700"
+          >
+            Aceptar
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-lg bg-gray-600 px-4 py-2 font-semibold text-white transition hover:bg-gray-500"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== PÁGINA PRINCIPAL =====
 export function EnvelopesPage() {
   const [sobres, setSobres] = useState<Sobre[]>([])
   const [loading, setLoading] = useState(true)
@@ -21,6 +58,14 @@ export function EnvelopesPage() {
   const [formData, setFormData] = useState({ nombre: '', porcentaje: '' })
   const [editingSobre, setEditingSobre] = useState<Sobre | null>(null)
   const [editFormData, setEditFormData] = useState({ nombre: '', porcentaje: '' })
+
+  // Estados para el modal de confirmación
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null as (() => void) | null,
+  });
 
   useEffect(() => {
     fetchSobres()
@@ -73,21 +118,37 @@ export function EnvelopesPage() {
     }
   }
 
-  async function handleDelete(id: number, saldo: number) {
+  // Función para abrir el diálogo personalizado
+  function openConfirmDialog(title: string, message: string, onConfirm: () => void) {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      onConfirm,
+    });
+  }
+
+  // handleDelete modificado
+  async function handleDelete(id: number, nombre: string, saldo: number) {
+    let title = 'Eliminar sobre';
+    let message = `¿Estás seguro de que quieres eliminar el sobre "${nombre}"?`;
+
     if (saldo > 0) {
-      setError('No puedes eliminar un sobre que todavía tiene saldo.')
-      return
+      title = 'Transferir saldo al Residuo';
+      message = `El sobre "${nombre}" tiene un saldo de $${saldo.toFixed(2)}. Se moverá al sobre "Residuo". ¿Continuar?`;
     }
 
-    if (!confirm('¿Estás seguro?')) return
-
-    try {
-      await apiClient.sobres.eliminar(id)
-      await fetchSobres()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al eliminar')
-      console.error(err)
-    }
+    openConfirmDialog(title, message, async () => {
+      try {
+        await apiClient.sobres.eliminar(id);
+        await fetchSobres();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error al eliminar');
+        console.error(err);
+      } finally {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false, onConfirm: null }));
+      }
+    });
   }
 
   function openEditModal(sobre: Sobre) {
@@ -166,23 +227,25 @@ export function EnvelopesPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 opacity-0 transition group-hover:opacity-100">
-                  <button
-                    onClick={() => openEditModal(sobre)}
-                    className="p-1 text-gray-400 transition hover:text-amber-400"
-                    title="Editar sobre"
-                  >
-                    <Pencil size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(sobre.id, sobre.saldo)}
-                    disabled={sobre.saldo > 0}
-                    className="p-1 text-gray-400 transition hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40"
-                    title={sobre.saldo > 0 ? 'No se puede eliminar con saldo' : 'Eliminar sobre'}
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
+                {/* Ocultar botones si es Residuo */}
+                {!sobre.nombre.toLowerCase().includes('residuo') && (
+                  <div className="flex gap-2 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      onClick={() => openEditModal(sobre)}
+                      className="p-1 text-gray-400 transition hover:text-amber-400"
+                      title="Editar sobre"
+                    >
+                      <Pencil size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(sobre.id, sobre.nombre, sobre.saldo)}
+                      className="p-1 text-gray-400 transition hover:text-red-500"
+                      title="Eliminar sobre"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="mb-4">
@@ -350,6 +413,21 @@ export function EnvelopesPage() {
           </div>
         )}
       </div>
+
+      {/* === DIÁLOGO DE CONFIRMACIÓN PERSONALIZADO === */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={() => {
+          if (confirmDialog.onConfirm) {
+            confirmDialog.onConfirm();
+          }
+        }}
+        onCancel={() => {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false, onConfirm: null }));
+        }}
+      />
     </AppLayout>
   )
 }
